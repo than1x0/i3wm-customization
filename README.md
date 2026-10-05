@@ -23,7 +23,7 @@ Modern, lightweight, and aesthetic i3wm setup customized for **Kali Linux** and 
 Clone this repository to your Kali Linux or Debian system:
 
 ```bash
-git clone https://github.com/0xabdoulaye/Kali-i3-customization.git
+git clone https://github.com/Sathira-Laksahan/Kali-i3-customization.git
 cd Kali-i3-customization
 bash installer.sh
 ```
