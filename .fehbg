@@ -1,2 +1,6 @@
 #!/bin/sh
-feh --no-fehbg --bg-fill ~/.wallpaper/23.jpg
+if [ -f "$HOME/.wallpaper/23.jpg" ]; then
+    feh --no-fehbg --bg-fill "$HOME/.wallpaper/23.jpg"
+elif [ -d "$HOME/.wallpaper" ]; then
+    feh --no-fehbg --bg-fill "$HOME/.wallpaper"/* 2>/dev/null
+fi

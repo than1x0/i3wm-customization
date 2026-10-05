@@ -1,0 +1,13 @@
+configuration {
+    modi: "drun,run,window";
+    font: "DejaVu Sans Mono 11";
+    show-icons: true;
+    terminal: "alacritty";
+    drun-match-fields: "name,generic,exec,categories";
+    matching: "fuzzy";
+    lines: 12;
+    columns: 2;
+    sidebar-mode: true;
+}
+
+@theme "/usr/share/rofi/themes/Arc-Dark.rasi"

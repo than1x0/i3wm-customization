@@ -1,75 +1,161 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
+# ==============================================================================
+# Kali Linux & Debian i3wm Customization Installer
+# Fully optimized for modern Kali Linux & Debian 12+ (Bookworm / Testing)
+# ==============================================================================
 
-sudo apt-get update -y && sudo apt-get upgrade -y
+set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-sudo apt-get install -y wget curl git thunar
-sudo apt-get install -y arandr flameshot arc-theme feh i3blocks i3status i3 i3-wm lxappearance python3-pip rofi unclutter cargo compton papirus-icon-theme imagemagick
-sudo apt-get install -y libxcb-shape0-dev libxcb-keysyms1-dev libpango1.0-dev libxcb-util0-dev xcb libxcb1-dev libxcb-icccm4-dev libyajl-dev libev-dev libxcb-xkb-dev libxcb-cursor-dev libxkbcommon-dev libxcb-xinerama0-dev libxkbcommon-x11-dev libstartup-notification0-dev libxcb-randr0-dev libxcb-xrm0 libxcb-xrm-dev autoconf meson
-sudo apt-get install -y libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev 
-sudo apt install libstartup-notification0-dev -y
-sudo apt-get -y install libxcb-xkb-dev 
-sudo apt-get install libsystemd-journal-dev libtiff5 -y
-sudo apt install libxcb-xinerama0 -y
-sudo apt install libxcb-xinerama0-dev -y
-sudo apt install libxcb-x* 
-sudo apt-get -y install libxcb-randr0
-sudo apt-get -y install libxcb-randr0-dev
-sudo apt-get -y install libxcb-*
-sudo apt-get -y install librust-xkbcommon-dev
-sudo apt-get -y install librust-xkbcommon-sys-dev
-sudo apt-get -y install yajl-tools
-sudo apt-get -y install ruby-ffi-yajl
-sudo apt-get -y install ruby-yajl
-sudo apt-get update -y
-sudo apt-get -y install libpcre*
-sudo apt-get -y install libpcre2-8-0
-sudo apt-get -y install libpcre2-dev
-sudo apt-get -y install cairo-dock-dev
-sudo apt-get -y install python3-gi-cairo
-sudo apt install libcairo2-dev
-sudo apt-get -y install librust-pangocairo-dev
-pip3 install pywal
+echo "========================================================"
+echo "    Starting Kali Linux & Debian i3 Setup Installer     "
+echo "========================================================"
 
-mkdir -p ~/.local/share/fonts/
+# 1. Check sudo / root privileges
+if [ "$EUID" -ne 0 ]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "[!] Error: sudo is required to run this script. Please install sudo or run as root."
+        exit 1
+    fi
+    SUDO="sudo"
+else
+    SUDO=""
+fi
 
-wget https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/Iosevka.zip
-wget https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/RobotoMono.zip
+# 2. Detect OS Distribution
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO=$NAME
+    echo "[+] Detected OS: $DISTRO ($VERSION_ID)"
+else
+    echo "[!] Warning: Cannot identify Linux distribution. Proceeding with standard Debian/APT commands."
+fi
 
-unzip Iosevka.zip -d ~/.local/share/fonts/
-unzip RobotoMono.zip -d ~/.local/share/fonts/
+# 3. Update Package Repositories
+echo "[+] Updating package repositories..."
+$SUDO apt-get update -y
 
-fc-cache -fv
+# 4. Install Core Packages & Dependencies
+echo "[+] Installing Window Manager, Terminal, Compositor, and Utilities..."
+PACKAGES=(
+    # Window Manager & Bar
+    i3
+    i3status
+    i3blocks
+    i3lock
+    
+    # Terminal
+    alacritty
+    
+    # Compositor & Launchers
+    picom
+    rofi
+    
+    # Wallpaper & Theming
+    feh
+    lxappearance
+    arc-theme
+    papirus-icon-theme
+    
+    # Utilities
+    flameshot
+    thunar
+    unclutter
+    imagemagick
+    unzip
+    curl
+    wget
+    git
+    zsh
+    pulseaudio-utils
+    xclip
+    
+    # Fonts
+    fonts-font-awesome
+    fonts-dejavu-core
+)
 
-wget https://github.com/barnumbirr/alacritty-debian/releases/download/v0.10.0-rc4-1/alacritty_0.10.0-rc4-1_amd64_bullseye.deb
-sudo dpkg -i alacritty_0.10.0-rc4-1_amd64_bullseye.deb
-sudo apt install -f
+# Install packages gracefully
+$SUDO apt-get install -y "${PACKAGES[@]}"
 
-git clone https://www.github.com/Airblader/i3 i3-gaps
-cd i3-gaps && mkdir -p build && cd build && meson ..
-ninja
-sudo ninja install
+# Install VM guest tools if inside a virtual machine (optional)
+if lscpu 2>/dev/null | grep -iq "hypervisor"; then
+    echo "[+] Virtual Machine detected. Installing VM guest integration..."
+    $SUDO apt-get install -y open-vm-tools-desktop 2>/dev/null || true
+fi
 
-cd ../..
+# 5. Download and Install Nerd Fonts
+FONTS_DIR="$HOME/.local/share/fonts"
+mkdir -p "$FONTS_DIR"
 
-mkdir -p ~/.config/i3
-mkdir -p ~/.config/compton
-mkdir -p ~/.config/rofi
-mkdir -p ~/.config/alacritty
+if [ ! -f "$FONTS_DIR/IosevkaNerdFont-Regular.ttf" ] && [ ! -f "$FONTS_DIR/Iosevka Nerd Font Complete.ttf" ]; then
+    echo "[+] Downloading and installing Nerd Fonts (Iosevka & RobotoMono)..."
+    TMP_FONT_DIR=$(mktemp -d)
+    
+    wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/Iosevka.zip" -O "$TMP_FONT_DIR/Iosevka.zip" || true
+    wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/RobotoMono.zip" -O "$TMP_FONT_DIR/RobotoMono.zip" || true
+    
+    if [ -f "$TMP_FONT_DIR/Iosevka.zip" ]; then
+        unzip -qo "$TMP_FONT_DIR/Iosevka.zip" -d "$FONTS_DIR"
+    fi
+    if [ -f "$TMP_FONT_DIR/RobotoMono.zip" ]; then
+        unzip -qo "$TMP_FONT_DIR/RobotoMono.zip" -d "$FONTS_DIR"
+    fi
+    
+    rm -rf "$TMP_FONT_DIR"
+    echo "[+] Refreshing font cache..."
+    fc-cache -f "$FONTS_DIR"
+else
+    echo "[+] Nerd Fonts already present. Skipping font download."
+fi
 
-cp .config/i3/config ~/.config/i3/config
-cp .config/alacritty/alacritty.yml ~/.config/alacritty/alacritty.yml
-cp .config/i3/i3blocks.conf ~/.config/i3/i3blocks.conf
-cp .config/compton/compton.conf ~/.config/compton/compton.conf
-cp .config/rofi/config ~/.config/rofi/config
-cp .fehbg ~/.fehbg
-cp .config/i3/clipboard_fix.sh ~/.config/i3/clipboard_fix.sh
-cp -r .wallpaper ~/.wallpaper 
+# 6. Install Oh My Zsh (Non-interactive)
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+    echo "[+] Installing Oh My Zsh (unattended mode)..."
+    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
+fi
 
+# 7. Deploy Configuration Files
+echo "[+] Deploying dotfiles to $HOME/.config/..."
+mkdir -p "$HOME/.config/i3/scripts"
+mkdir -p "$HOME/.config/picom"
+mkdir -p "$HOME/.config/compton"
+mkdir -p "$HOME/.config/rofi"
+mkdir -p "$HOME/.config/alacritty"
+mkdir -p "$HOME/.wallpaper"
 
-echo "Finished! Now just find some Background wallpaper and set them using the command : feh --bg-scale background.jpg"
-echo "Reboot your machine and on login Select i3"
-echo "When your system is up. open the Terminal using Win+Enter and then run lxappearance and Select arc-dark"
+# Copy configurations
+cp "$SCRIPT_DIR/.config/i3/config" "$HOME/.config/i3/config"
+cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$HOME/.config/i3/i3blocks.conf"
+cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$HOME/.config/i3/clipboard_fix.sh"
+cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/"
 
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+cp "$SCRIPT_DIR/.config/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+cp "$SCRIPT_DIR/.config/compton/compton.conf" "$HOME/.config/compton/compton.conf"
+
+cp "$SCRIPT_DIR/.config/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
+cp "$SCRIPT_DIR/.config/alacritty/alacritty.yml" "$HOME/.config/alacritty/alacritty.yml"
+
+cp "$SCRIPT_DIR/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
+cp "$SCRIPT_DIR/.config/rofi/config" "$HOME/.config/rofi/config"
+
+cp "$SCRIPT_DIR/.fehbg" "$HOME/.fehbg"
+cp -r "$SCRIPT_DIR/.wallpaper/"* "$HOME/.wallpaper/"
+
+# Set executable permissions
+chmod +x "$HOME/.fehbg"
+chmod +x "$HOME/.config/i3/clipboard_fix.sh"
+chmod +x "$HOME/.config/i3/scripts/"*.sh
+
+echo "========================================================"
+echo "          Installation Completed Successfully!          "
+echo "========================================================"
+echo "Next Steps:"
+echo " 1. Log out or reboot your system."
+echo " 2. At the display manager login screen, select 'i3' as your session."
+echo " 3. Press 'Win + Enter' to open Alacritty terminal."
+echo " 4. Press 'Win + d' to launch applications with Rofi."
+echo " 5. Run 'lxappearance' to set the Widget theme to 'Arc-Dark' and Icon theme to 'Papirus-Dark'."
+echo "========================================================"
