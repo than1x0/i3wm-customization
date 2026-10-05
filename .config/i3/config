@@ -144,8 +144,9 @@ bindsym $mod+Shift+Return exec thunar
 default_border pixel 2
 default_floating_border pixel 2
 for_window [class="^.*"] border pixel 2
-gaps inner 5
-gaps outer 5
+gaps inner 0
+gaps outer 0
+smart_gaps on
 
 # Window Colors
 client.focused          #82c8ff #1C1D2B #ffffff #82c8ff #82c8ff

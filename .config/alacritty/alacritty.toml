@@ -2,7 +2,7 @@
 # Fully compatible with Kali Linux and Debian 12 (Bookworm)
 
 [window]
-padding = { x = 14, y = 14 }
+padding = { x = 6, y = 6 }
 dynamic_padding = true
 decorations = "full"
 opacity = 0.85
