@@ -183,12 +183,16 @@ deploy_configs() {
         echo "arrow" > "$HOME/.config/i3/prompt_style"
     fi
 
-    # Integrate custom prompt with ~/.zshrc
-    if [ -f "$HOME/.zshrc" ]; then
-        if ! grep -q "prompt.zsh" "$HOME/.zshrc" 2>/dev/null; then
-            echo -e "\n# Kali i3wm Custom Prompt\n[ -f \"\$HOME/.config/i3/scripts/prompt.zsh\" ] && source \"\$HOME/.config/i3/scripts/prompt.zsh\"" >> "$HOME/.zshrc"
+    # Integrate custom prompt with ~/.zshrc and ~/.bashrc
+    for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+        if [ -f "$rc" ] && ! grep -q "prompt.zsh" "$rc" 2>/dev/null; then
+            cat <<'EOF' >> "$rc"
+
+# Kali i3wm Custom Prompt
+[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"
+EOF
         fi
-    fi
+    done
 
     install_cli_tools
 }
@@ -328,9 +332,7 @@ change_wallpaper() {
 
 change_prompt() {
     TARGET_STYLE="$1"
-    if [ ! -f "$HOME/.config/i3/scripts/set_prompt.sh" ]; then
-        deploy_configs
-    fi
+    deploy_configs
     bash "$HOME/.config/i3/scripts/set_prompt.sh" "$TARGET_STYLE"
 }
 

@@ -1,5 +1,6 @@
 # ==============================================================================
 # Kali Linux & Debian i3wm Custom Prompt Configuration
+# Dynamically loads and switches terminal prompt styles
 # ==============================================================================
 
 PROMPT_STYLE_FILE="$HOME/.config/i3/prompt_style"
@@ -10,27 +11,45 @@ _apply_kali_prompt() {
 
     case "$style" in
         classic|2)
-            # Classic Linux prompt (Green for normal user, Red for root)
-            PROMPT='%(?.%F{green}.%F{red})%n@%m%f:%F{blue}%~%f%# '
+            # Classic Linux: user@host:path$ (Green for user, Red for root)
+            if [ "$EUID" -eq 0 ]; then
+                PROMPT='%F{red}%n@%m%f:%F{blue}%~%f# '
+            else
+                PROMPT='%F{green}%n@%m%f:%F{blue}%~%f$ '
+            fi
             ;;
         kali|3)
-            # Iconic Kali Linux Two-Line Prompt
-            PROMPT=$'%(?.%F{blue}.%F{red})┌──(%F{white}%n%F{red}㉿%F{white}%m%F{blue})-[%F{cyan}%~%F{blue}]\n└─%F{white}%#%f '
+            # Iconic Kali Linux Two-Line prompt
+            if [ "$EUID" -eq 0 ]; then
+                PROMPT=$'┌──(%F{red}%n㉿%m%f)-[%F{blue}%~%f]\n└─%F{red}#%f '
+            else
+                PROMPT=$'┌──(%F{blue}%n㉿%m%f)-[%F{cyan}%~%f]\n└─$ '
+            fi
             ;;
         compact|4)
-            # Compact brackets
+            # Compact brackets: [user@host dir]$
             PROMPT='%F{magenta}[%n@%m %1~]%f%# '
             ;;
         arrow|1|*)
             # Default Minimal Arrow (Oh-My-Zsh style)
-            PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f '
+            if type git_prompt_info >/dev/null 2>&1; then
+                PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f $(git_prompt_info)'
+            else
+                PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f '
+            fi
             ;;
     esac
 }
 
-_apply_kali_prompt
+# Auto-apply on every prompt draw so changes take effect dynamically
+autoload -Uz add-zsh-hook 2>/dev/null || true
+if type add-zsh-hook >/dev/null 2>&1; then
+    add-zsh-hook precmd _apply_kali_prompt
+else
+    _apply_kali_prompt
+fi
 
-# Interactive shell function for live in-terminal switching
+# Shell function for instant live switching within current session
 set-prompt() {
     if [ -x "$HOME/.config/i3/scripts/set_prompt.sh" ]; then
         "$HOME/.config/i3/scripts/set_prompt.sh" "$@"

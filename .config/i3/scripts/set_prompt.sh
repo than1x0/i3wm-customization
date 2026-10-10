@@ -7,15 +7,54 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_STYLE_FILE="$HOME/.config/i3/prompt_style"
-mkdir -p "$HOME/.config/i3"
+mkdir -p "$HOME/.config/i3/scripts"
+
+ensure_prompt_configured() {
+    # 1. Ensure prompt.zsh exists in ~/.config/i3/scripts/
+    if [ ! -f "$HOME/.config/i3/scripts/prompt.zsh" ]; then
+        if [ -f "$SCRIPT_DIR/prompt.zsh" ]; then
+            cp "$SCRIPT_DIR/prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
+        elif [ -f "$SCRIPT_DIR/../prompt.zsh" ]; then
+            cp "$SCRIPT_DIR/../prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
+        elif [ -f "$SCRIPT_DIR/.config/i3/scripts/prompt.zsh" ]; then
+            cp "$SCRIPT_DIR/.config/i3/scripts/prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
+        fi
+    fi
+
+    # 2. Add hook to ~/.zshrc if not present
+    ZSHRC="$HOME/.zshrc"
+    if [ -f "$ZSHRC" ]; then
+        if ! grep -q "prompt.zsh" "$ZSHRC" 2>/dev/null; then
+            echo "" >> "$ZSHRC"
+            echo "# Kali i3wm Custom Prompt Hook" >> "$ZSHRC"
+            echo '[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"' >> "$ZSHRC"
+        fi
+    fi
+
+    # 3. Add hook to ~/.bashrc for bash fallback
+    BASHRC="$HOME/.bashrc"
+    if [ -f "$BASHRC" ]; then
+        if ! grep -q "prompt.zsh" "$BASHRC" 2>/dev/null; then
+            echo "" >> "$BASHRC"
+            echo "# Kali i3wm Custom Prompt Hook" >> "$BASHRC"
+            echo '[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"' >> "$BASHRC"
+        fi
+    fi
+}
 
 apply_prompt() {
     local style="$1"
     local name="$2"
+
+    ensure_prompt_configured
     echo "$style" > "$PROMPT_STYLE_FILE"
+
     echo "[✔] Terminal prompt set to: $name"
-    echo "[i] Tip: Open a new terminal or run 'source ~/.zshrc' to apply."
+    echo "[✔] ~/.zshrc prompt integration verified."
+    echo "[i] Run 'source ~/.zshrc' (or 'exec zsh') to apply to this terminal."
+
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "Terminal Prompt Updated" "$name" -i utilities-terminal 2>/dev/null || true
     fi
