@@ -1,6 +1,12 @@
 #!/bin/sh
-if [ -f "$HOME/.wallpaper/23.jpg" ]; then
-    feh --no-fehbg --bg-fill "$HOME/.wallpaper/23.jpg"
+# Kali i3wm Wallpaper Setter
+DEFAULT_WALL="$HOME/.wallpaper/2-kali-dragon.jpg"
+
+if [ -f "$DEFAULT_WALL" ]; then
+    feh --no-fehbg --bg-fill "$DEFAULT_WALL"
 elif [ -d "$HOME/.wallpaper" ]; then
-    feh --no-fehbg --bg-fill "$HOME/.wallpaper"/* 2>/dev/null
+    FIRST_WALL=$(ls -1 "$HOME/.wallpaper"/* 2>/dev/null | head -n 1)
+    if [ -n "$FIRST_WALL" ]; then
+        feh --no-fehbg --bg-fill "$FIRST_WALL"
+    fi
 fi

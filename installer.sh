@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# Kali Linux & Debian i3wm Customization Installer
+# Kali Linux & Debian i3wm Customization Installer & Updater
 # Fully optimized for modern Kali Linux & Debian 12+ (Bookworm / Testing)
 # ==============================================================================
 
@@ -9,153 +9,387 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ------------------------------------------------------------------------------
+# Helper Functions
+# ------------------------------------------------------------------------------
+
+print_banner() {
+    echo "========================================================"
+    echo "    Kali Linux & Debian i3 Setup Installer & Updater    "
+    echo "========================================================"
+}
+
+check_privileges() {
+    if [ "$EUID" -ne 0 ]; then
+        if ! command -v sudo >/dev/null 2>&1; then
+            echo "[!] Error: sudo is required for package installations. Please install sudo or run as root."
+            exit 1
+        fi
+        SUDO="sudo"
+    else
+        SUDO=""
+    fi
+}
+
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO=$NAME
+        echo "[+] Detected OS: $DISTRO ($VERSION_ID)"
+    else
+        echo "[!] Warning: Cannot identify Linux distribution. Proceeding with standard Debian/APT commands."
+    fi
+}
+
+install_packages() {
+    check_privileges
+    detect_os
+
+    echo "[+] Updating package repositories..."
+    $SUDO apt-get update -y
+
+    echo "[+] Installing Window Manager, Terminal, Compositor, and Utilities..."
+    PACKAGES=(
+        # Window Manager & Bar
+        i3
+        i3status
+        i3blocks
+        i3lock
+        
+        # Terminal
+        alacritty
+        
+        # Compositor & Launchers
+        picom
+        rofi
+        
+        # Wallpaper & Theming
+        feh
+        lxappearance
+        arc-theme
+        papirus-icon-theme
+        
+        # Utilities & System Controls
+        flameshot
+        thunar
+        unclutter
+        imagemagick
+        unzip
+        curl
+        wget
+        git
+        zsh
+        pulseaudio-utils
+        xclip
+        brightnessctl
+        libnotify-bin
+        
+        # Fonts
+        fonts-font-awesome
+        fonts-dejavu-core
+    )
+
+    $SUDO apt-get install -y "${PACKAGES[@]}"
+
+    # Install VM guest tools if inside a virtual machine
+    if lscpu 2>/dev/null | grep -iq "hypervisor"; then
+        echo "[+] Virtual Machine detected. Checking guest integration tools..."
+        if command -v systemd-detect-virt >/dev/null 2>&1 && systemd-detect-virt | grep -iq "oracle\|virtualbox"; then
+            $SUDO apt-get install -y virtualbox-guest-x11 2>/dev/null || true
+        else
+            $SUDO apt-get install -y open-vm-tools-desktop 2>/dev/null || true
+        fi
+    fi
+}
+
+install_fonts() {
+    FONTS_DIR="$HOME/.local/share/fonts"
+    mkdir -p "$FONTS_DIR"
+
+    if [ ! -f "$FONTS_DIR/IosevkaNerdFont-Regular.ttf" ] && [ ! -f "$FONTS_DIR/Iosevka Nerd Font Complete.ttf" ]; then
+        echo "[+] Downloading and installing Nerd Fonts (Iosevka & RobotoMono)..."
+        TMP_FONT_DIR=$(mktemp -d)
+        
+        wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/Iosevka.zip" -O "$TMP_FONT_DIR/Iosevka.zip" || true
+        wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/RobotoMono.zip" -O "$TMP_FONT_DIR/RobotoMono.zip" || true
+        
+        if [ -f "$TMP_FONT_DIR/Iosevka.zip" ]; then
+            unzip -qo "$TMP_FONT_DIR/Iosevka.zip" -d "$FONTS_DIR"
+        fi
+        if [ -f "$TMP_FONT_DIR/RobotoMono.zip" ]; then
+            unzip -qo "$TMP_FONT_DIR/RobotoMono.zip" -d "$FONTS_DIR"
+        fi
+        
+        rm -rf "$TMP_FONT_DIR"
+        echo "[+] Refreshing font cache..."
+        fc-cache -f "$FONTS_DIR"
+    else
+        echo "[+] Nerd Fonts already present. Skipping font download."
+    fi
+}
+
+install_zsh() {
+    if [ ! -d "$HOME/.oh-my-zsh" ]; then
+        echo "[+] Installing Oh My Zsh (unattended mode)..."
+        RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
+    fi
+}
+
+backup_configs() {
+    if [ -d "$HOME/.config/i3" ]; then
+        BACKUP_DIR="$HOME/.config/i3_backup_$(date +%Y%m%d_%H%M%S)"
+        echo "[+] Creating safety backup of current configs at $BACKUP_DIR..."
+        mkdir -p "$BACKUP_DIR"
+        cp -r "$HOME/.config/i3" "$BACKUP_DIR/" 2>/dev/null || true
+        [ -f "$HOME/.config/picom/picom.conf" ] && cp -r "$HOME/.config/picom" "$BACKUP_DIR/" 2>/dev/null || true
+        [ -f "$HOME/.config/alacritty/alacritty.toml" ] && cp -r "$HOME/.config/alacritty" "$BACKUP_DIR/" 2>/dev/null || true
+        [ -f "$HOME/.config/rofi/config.rasi" ] && cp -r "$HOME/.config/rofi" "$BACKUP_DIR/" 2>/dev/null || true
+    fi
+}
+
+deploy_configs() {
+    echo "[+] Deploying dotfiles to $HOME/.config/..."
+    mkdir -p "$HOME/.config/i3/scripts"
+    mkdir -p "$HOME/.config/picom"
+    mkdir -p "$HOME/.config/rofi"
+    mkdir -p "$HOME/.config/alacritty"
+    mkdir -p "$HOME/.wallpaper"
+    mkdir -p "$HOME/.local/bin"
+
+    # Copy configurations
+    cp "$SCRIPT_DIR/.config/i3/config" "$HOME/.config/i3/config"
+    cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$HOME/.config/i3/i3blocks.conf"
+    cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$HOME/.config/i3/clipboard_fix.sh"
+    cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/"
+
+    cp "$SCRIPT_DIR/.config/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+
+    cp "$SCRIPT_DIR/.config/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
+    cp "$SCRIPT_DIR/.config/alacritty/alacritty.yml" "$HOME/.config/alacritty/alacritty.yml"
+
+    cp "$SCRIPT_DIR/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
+
+    cp "$SCRIPT_DIR/.fehbg" "$HOME/.fehbg"
+    cp -r "$SCRIPT_DIR/.wallpaper/"* "$HOME/.wallpaper/"
+
+    # Set executable permissions
+    chmod +x "$HOME/.fehbg"
+    chmod +x "$HOME/.config/i3/clipboard_fix.sh"
+    chmod +x "$HOME/.config/i3/scripts/"*.sh
+
+    install_cli_tools
+}
+
+install_cli_tools() {
+    # 1. Global Updater Script
+    UPDATER_SCRIPT="$HOME/.local/bin/i3-update"
+    cat <<EOF > "$UPDATER_SCRIPT"
+#!/usr/bin/env bash
+# Global quick updater for Kali i3 Customization
+REPO_DIR="$SCRIPT_DIR"
+
 echo "========================================================"
-echo "    Starting Kali Linux & Debian i3 Setup Installer     "
+echo "           Kali i3 Dotfiles Live Updater                "
 echo "========================================================"
 
-# 1. Check sudo / root privileges
-if [ "$EUID" -ne 0 ]; then
-    if ! command -v sudo >/dev/null 2>&1; then
-        echo "[!] Error: sudo is required to run this script. Please install sudo or run as root."
+if [ -d "\$REPO_DIR/.git" ]; then
+    echo "[+] Fetching latest updates from GitHub..."
+    git -C "\$REPO_DIR" pull --ff-only || {
+        echo "[!] Git pull encountered conflicts or failed. Proceeding with local update."
+    }
+fi
+
+bash "\$REPO_DIR/installer.sh" --update
+EOF
+    chmod +x "$UPDATER_SCRIPT"
+
+    # 2. Global Wallpaper Switcher Script
+    WALL_SCRIPT="$HOME/.local/bin/set-wallpaper"
+    ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$WALL_SCRIPT"
+    ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$HOME/.local/bin/i3-wallpaper"
+
+    # Link to /usr/local/bin if root or sudo is available so it's in system PATH
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo ln -sf "$UPDATER_SCRIPT" /usr/local/bin/i3-update 2>/dev/null || true
+        sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/set-wallpaper 2>/dev/null || true
+        sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/i3-wallpaper 2>/dev/null || true
+    fi
+}
+
+reload_i3_live() {
+    # If currently running inside an X11 / i3 session, live-reload without restarting session
+    if [ -n "$DISPLAY" ] && command -v i3-msg >/dev/null 2>&1 && pgrep -x i3 >/dev/null 2>&1; then
+        echo "[+] Active i3 session detected! Reloading live..."
+        i3-msg reload >/dev/null 2>&1 || true
+        
+        # Refresh wallpaper
+        if [ -x "$HOME/.fehbg" ]; then
+            "$HOME/.fehbg" >/dev/null 2>&1 || true
+        fi
+
+        # Restart compositor smoothly if running
+        if pgrep -x picom >/dev/null 2>&1; then
+            pkill -x picom 2>/dev/null || true
+            sleep 0.2
+            picom -b --config "$HOME/.config/picom/picom.conf" >/dev/null 2>&1 || true
+        fi
+
+        # Re-trigger VM clipboard sync
+        if [ -x "$HOME/.config/i3/clipboard_fix.sh" ]; then
+            "$HOME/.config/i3/clipboard_fix.sh" >/dev/null 2>&1 || true
+        fi
+
+        # Send desktop notification if notify-send is available
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send "i3wm Customization" "Dotfiles and status bar updated successfully!" -i preferences-desktop-theme 2>/dev/null || true
+        fi
+        
+        echo "[✔] Live reload completed! Changes are now active."
+    fi
+}
+
+full_install() {
+    print_banner
+    install_packages
+    install_fonts
+    install_zsh
+    deploy_configs
+    reload_i3_live
+
+    echo "========================================================"
+    echo "          Installation Completed Successfully!          "
+    echo "========================================================"
+    echo "Quick Tips:"
+    echo " 1. Select 'i3' as your session at login screen."
+    echo " 2. Press 'Win + Enter' for Alacritty terminal."
+    echo " 3. Press 'Win + d' for Rofi application launcher."
+    echo " 4. Press 'Win + Shift + w' to open the Wallpaper Switcher."
+    echo " 5. Run 'set-wallpaper [1-5|path]' to switch wallpaper anytime."
+    echo " 6. Run 'i3-update' or 'bash update.sh' to update dotfiles."
+    echo "========================================================"
+}
+
+quick_update() {
+    print_banner
+    echo "[*] Running Quick Dotfiles Update (No reinstall needed)..."
+    backup_configs
+    deploy_configs
+    reload_i3_live
+
+    echo "========================================================"
+    echo "           Update Completed Successfully!               "
+    echo "========================================================"
+    echo "[✔] All dotfiles, scripts, and status bars updated."
+    echo "[✔] You can run 'i3-update' anytime to sync changes."
+    echo "========================================================"
+}
+
+git_update() {
+    print_banner
+    echo "[*] Checking for updates from Git repository..."
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        git -C "$SCRIPT_DIR" pull || {
+            echo "[!] Git pull failed. Continuing with local files..."
+        }
+    else
+        echo "[!] Not a git repository. Skipping git pull."
+    fi
+    quick_update
+}
+
+change_wallpaper() {
+    TARGET_IMG="$1"
+    # Ensure configs are deployed first if ~/.config/i3/scripts/set_wallpaper.sh is missing
+    if [ ! -f "$HOME/.config/i3/scripts/set_wallpaper.sh" ]; then
+        deploy_configs
+    fi
+    bash "$HOME/.config/i3/scripts/set_wallpaper.sh" "$TARGET_IMG"
+}
+
+show_help() {
+    echo "Kali Linux & Debian i3wm Customization Installer & Updater"
+    echo ""
+    echo "Usage: ./installer.sh [OPTION]"
+    echo ""
+    echo "Options:"
+    echo "  -u, --update                 Quick update dotfiles & scripts only (No sudo / No package install)"
+    echo "  -g, --git-update             Pull latest changes from Git and update dotfiles"
+    echo "  -f, --full                   Run full installation (Packages, fonts, dotfiles)"
+    echo "  -w, --wallpaper [1-5|PATH]   Switch wallpaper (1-5 for minimal presets, or path to custom image)"
+    echo "  -h, --help                   Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./installer.sh --wallpaper 2             # Switch to wallpaper #2 (Kali Dragon)"
+    echo "  ./installer.sh -w ~/Downloads/bg.png     # Set custom wallpaper"
+    echo "  ./installer.sh --update                  # Quick update without reinstalling"
+    echo "  ./installer.sh --full                    # Complete first-time installation"
+    echo "  set-wallpaper                            # Wallpaper menu anytime"
+    echo "  i3-update                                # Update anytime from terminal"
+}
+
+# ------------------------------------------------------------------------------
+# Entrypoint & CLI Parsing
+# ------------------------------------------------------------------------------
+
+case "$1" in
+    -u|--update)
+        quick_update
+        exit 0
+        ;;
+    -g|--git-update)
+        git_update
+        exit 0
+        ;;
+    -f|--full)
+        full_install
+        exit 0
+        ;;
+    -w|--wallpaper)
+        change_wallpaper "$2"
+        exit 0
+        ;;
+    -h|--help)
+        show_help
+        exit 0
+        ;;
+    "")
+        # Interactive mode if running in a terminal
+        if [ -t 0 ]; then
+            print_banner
+            echo "Please choose an option:"
+            echo "  1) Full Installation  (First time setup - packages, fonts & configs)"
+            echo "  2) Quick Update        (Update dotfiles & scripts only - Instant)"
+            echo "  3) Git Pull & Update   (Pull latest from GitHub & update configs)"
+            echo "  4) Switch Wallpaper    (Choose from 5 minimal wallpapers or custom)"
+            echo "  5) Exit"
+            echo ""
+            read -rp "Select an option [1-5] (Default: 1): " choice
+            case "$choice" in
+                2)
+                    quick_update
+                    ;;
+                3)
+                    git_update
+                    ;;
+                4)
+                    change_wallpaper ""
+                    ;;
+                5)
+                    echo "Aborted."
+                    exit 0
+                    ;;
+                *)
+                    full_install
+                    ;;
+            esac
+        else
+            # Non-interactive default to full install
+            full_install
+        fi
+        ;;
+    *)
+        echo "[!] Unknown option: $1"
+        show_help
         exit 1
-    fi
-    SUDO="sudo"
-else
-    SUDO=""
-fi
-
-# 2. Detect OS Distribution
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    DISTRO=$NAME
-    echo "[+] Detected OS: $DISTRO ($VERSION_ID)"
-else
-    echo "[!] Warning: Cannot identify Linux distribution. Proceeding with standard Debian/APT commands."
-fi
-
-# 3. Update Package Repositories
-echo "[+] Updating package repositories..."
-$SUDO apt-get update -y
-
-# 4. Install Core Packages & Dependencies
-echo "[+] Installing Window Manager, Terminal, Compositor, and Utilities..."
-PACKAGES=(
-    # Window Manager & Bar
-    i3
-    i3status
-    i3blocks
-    i3lock
-    
-    # Terminal
-    alacritty
-    
-    # Compositor & Launchers
-    picom
-    rofi
-    
-    # Wallpaper & Theming
-    feh
-    lxappearance
-    arc-theme
-    papirus-icon-theme
-    
-    # Utilities
-    flameshot
-    thunar
-    unclutter
-    imagemagick
-    unzip
-    curl
-    wget
-    git
-    zsh
-    pulseaudio-utils
-    xclip
-    
-    # Fonts
-    fonts-font-awesome
-    fonts-dejavu-core
-)
-
-# Install packages gracefully
-$SUDO apt-get install -y "${PACKAGES[@]}"
-
-# Install VM guest tools if inside a virtual machine (optional)
-if lscpu 2>/dev/null | grep -iq "hypervisor"; then
-    echo "[+] Virtual Machine detected. Installing VM guest integration..."
-    $SUDO apt-get install -y open-vm-tools-desktop 2>/dev/null || true
-fi
-
-# 5. Download and Install Nerd Fonts
-FONTS_DIR="$HOME/.local/share/fonts"
-mkdir -p "$FONTS_DIR"
-
-if [ ! -f "$FONTS_DIR/IosevkaNerdFont-Regular.ttf" ] && [ ! -f "$FONTS_DIR/Iosevka Nerd Font Complete.ttf" ]; then
-    echo "[+] Downloading and installing Nerd Fonts (Iosevka & RobotoMono)..."
-    TMP_FONT_DIR=$(mktemp -d)
-    
-    wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/Iosevka.zip" -O "$TMP_FONT_DIR/Iosevka.zip" || true
-    wget -q --show-progress "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/RobotoMono.zip" -O "$TMP_FONT_DIR/RobotoMono.zip" || true
-    
-    if [ -f "$TMP_FONT_DIR/Iosevka.zip" ]; then
-        unzip -qo "$TMP_FONT_DIR/Iosevka.zip" -d "$FONTS_DIR"
-    fi
-    if [ -f "$TMP_FONT_DIR/RobotoMono.zip" ]; then
-        unzip -qo "$TMP_FONT_DIR/RobotoMono.zip" -d "$FONTS_DIR"
-    fi
-    
-    rm -rf "$TMP_FONT_DIR"
-    echo "[+] Refreshing font cache..."
-    fc-cache -f "$FONTS_DIR"
-else
-    echo "[+] Nerd Fonts already present. Skipping font download."
-fi
-
-# 6. Install Oh My Zsh (Non-interactive)
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    echo "[+] Installing Oh My Zsh (unattended mode)..."
-    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
-fi
-
-# 7. Deploy Configuration Files
-echo "[+] Deploying dotfiles to $HOME/.config/..."
-mkdir -p "$HOME/.config/i3/scripts"
-mkdir -p "$HOME/.config/picom"
-mkdir -p "$HOME/.config/compton"
-mkdir -p "$HOME/.config/rofi"
-mkdir -p "$HOME/.config/alacritty"
-mkdir -p "$HOME/.wallpaper"
-
-# Copy configurations
-cp "$SCRIPT_DIR/.config/i3/config" "$HOME/.config/i3/config"
-cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$HOME/.config/i3/i3blocks.conf"
-cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$HOME/.config/i3/clipboard_fix.sh"
-cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/"
-
-cp "$SCRIPT_DIR/.config/picom/picom.conf" "$HOME/.config/picom/picom.conf"
-cp "$SCRIPT_DIR/.config/compton/compton.conf" "$HOME/.config/compton/compton.conf"
-
-cp "$SCRIPT_DIR/.config/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
-cp "$SCRIPT_DIR/.config/alacritty/alacritty.yml" "$HOME/.config/alacritty/alacritty.yml"
-
-cp "$SCRIPT_DIR/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
-cp "$SCRIPT_DIR/.config/rofi/config" "$HOME/.config/rofi/config"
-
-cp "$SCRIPT_DIR/.fehbg" "$HOME/.fehbg"
-cp -r "$SCRIPT_DIR/.wallpaper/"* "$HOME/.wallpaper/"
-
-# Set executable permissions
-chmod +x "$HOME/.fehbg"
-chmod +x "$HOME/.config/i3/clipboard_fix.sh"
-chmod +x "$HOME/.config/i3/scripts/"*.sh
-
-echo "========================================================"
-echo "          Installation Completed Successfully!          "
-echo "========================================================"
-echo "Next Steps:"
-echo " 1. Log out or reboot your system."
-echo " 2. At the display manager login screen, select 'i3' as your session."
-echo " 3. Press 'Win + Enter' to open Alacritty terminal."
-echo " 4. Press 'Win + d' to launch applications with Rofi."
-echo " 5. Run 'lxappearance' to set the Widget theme to 'Arc-Dark' and Icon theme to 'Papirus-Dark'."
-echo "========================================================"
+        ;;
+esac

@@ -140,6 +140,9 @@ bindsym $mod+P exec flameshot gui
 # File manager shortcut
 bindsym $mod+Shift+Return exec thunar
 
+# Wallpaper selector shortcut (Rofi GUI)
+bindsym $mod+Shift+w exec ~/.config/i3/scripts/set_wallpaper.sh --rofi
+
 # Window borders & Gaps
 default_border pixel 2
 default_floating_border pixel 2
@@ -175,8 +178,8 @@ bar {
 # 1. Wallpaper Setter
 exec_always --no-startup-id ~/.fehbg
 
-# 2. Compositor (Picom preferred, Compton as legacy fallback)
-exec_always --no-startup-id sh -c "pgrep -x picom >/dev/null || picom -b --config ~/.config/picom/picom.conf 2>/dev/null || pgrep -x compton >/dev/null || compton -b --config ~/.config/compton/compton.conf"
+# 2. Compositor (Picom)
+exec_always --no-startup-id sh -c "pgrep -x picom >/dev/null || picom -b --config ~/.config/picom/picom.conf"
 
 # 3. VM Clipboard & Resolution Synchronization Fix
 exec_always --no-startup-id ~/.config/i3/clipboard_fix.sh
