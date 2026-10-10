@@ -160,7 +160,8 @@ deploy_configs() {
     cp "$SCRIPT_DIR/.config/i3/config" "$HOME/.config/i3/config"
     cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$HOME/.config/i3/i3blocks.conf"
     cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$HOME/.config/i3/clipboard_fix.sh"
-    cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/"
+    cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/" 2>/dev/null || true
+    cp "$SCRIPT_DIR/.config/i3/scripts/"*.zsh "$HOME/.config/i3/scripts/" 2>/dev/null || true
 
     cp "$SCRIPT_DIR/.config/picom/picom.conf" "$HOME/.config/picom/picom.conf"
 
@@ -176,6 +177,18 @@ deploy_configs() {
     chmod +x "$HOME/.fehbg"
     chmod +x "$HOME/.config/i3/clipboard_fix.sh"
     chmod +x "$HOME/.config/i3/scripts/"*.sh
+
+    # Initialize default prompt style (Minimal Arrow) if not already configured
+    if [ ! -f "$HOME/.config/i3/prompt_style" ]; then
+        echo "arrow" > "$HOME/.config/i3/prompt_style"
+    fi
+
+    # Integrate custom prompt with ~/.zshrc
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "prompt.zsh" "$HOME/.zshrc" 2>/dev/null; then
+            echo -e "\n# Kali i3wm Custom Prompt\n[ -f \"\$HOME/.config/i3/scripts/prompt.zsh\" ] && source \"\$HOME/.config/i3/scripts/prompt.zsh\"" >> "$HOME/.zshrc"
+        fi
+    fi
 
     install_cli_tools
 }
@@ -208,11 +221,18 @@ EOF
     ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$WALL_SCRIPT"
     ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$HOME/.local/bin/i3-wallpaper"
 
+    # 3. Global Terminal Prompt Switcher Script
+    PROMPT_SCRIPT="$HOME/.local/bin/set-prompt"
+    ln -sf "$HOME/.config/i3/scripts/set_prompt.sh" "$PROMPT_SCRIPT"
+    ln -sf "$HOME/.config/i3/scripts/set_prompt.sh" "$HOME/.local/bin/i3-prompt"
+
     # Link to /usr/local/bin if root or sudo is available so it's in system PATH
     if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         sudo ln -sf "$UPDATER_SCRIPT" /usr/local/bin/i3-update 2>/dev/null || true
         sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/set-wallpaper 2>/dev/null || true
         sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/i3-wallpaper 2>/dev/null || true
+        sudo ln -sf "$PROMPT_SCRIPT" /usr/local/bin/set-prompt 2>/dev/null || true
+        sudo ln -sf "$PROMPT_SCRIPT" /usr/local/bin/i3-prompt 2>/dev/null || true
     fi
 }
 
@@ -265,7 +285,8 @@ full_install() {
     echo " 3. Press 'Win + d' for Rofi application launcher."
     echo " 4. Press 'Win + Shift + w' to open the Wallpaper Switcher."
     echo " 5. Run 'set-wallpaper [1-5|path]' to switch wallpaper anytime."
-    echo " 6. Run 'i3-update' or 'bash update.sh' to update dotfiles."
+    echo " 6. Run 'set-prompt [arrow|classic|kali]' to switch prompt style."
+    echo " 7. Run 'i3-update' or 'bash update.sh' to update dotfiles."
     echo "========================================================"
 }
 
@@ -279,7 +300,7 @@ quick_update() {
     echo "========================================================"
     echo "           Update Completed Successfully!               "
     echo "========================================================"
-    echo "[✔] All dotfiles, scripts, and status bars updated."
+    echo "[✔] All dotfiles, scripts, prompts, and status bars updated."
     echo "[✔] You can run 'i3-update' anytime to sync changes."
     echo "========================================================"
 }
@@ -299,11 +320,18 @@ git_update() {
 
 change_wallpaper() {
     TARGET_IMG="$1"
-    # Ensure configs are deployed first if ~/.config/i3/scripts/set_wallpaper.sh is missing
     if [ ! -f "$HOME/.config/i3/scripts/set_wallpaper.sh" ]; then
         deploy_configs
     fi
     bash "$HOME/.config/i3/scripts/set_wallpaper.sh" "$TARGET_IMG"
+}
+
+change_prompt() {
+    TARGET_STYLE="$1"
+    if [ ! -f "$HOME/.config/i3/scripts/set_prompt.sh" ]; then
+        deploy_configs
+    fi
+    bash "$HOME/.config/i3/scripts/set_prompt.sh" "$TARGET_STYLE"
 }
 
 show_help() {
@@ -316,14 +344,18 @@ show_help() {
     echo "  -g, --git-update             Pull latest changes from Git and update dotfiles"
     echo "  -f, --full                   Run full installation (Packages, fonts, dotfiles)"
     echo "  -w, --wallpaper [1-5|PATH]   Switch wallpaper (1-5 for minimal presets, or path to custom image)"
+    echo "  -p, --prompt [1-4|STYLE]     Switch terminal prompt style (arrow, classic, kali, compact)"
     echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./installer.sh --wallpaper 2             # Switch to wallpaper #2 (Kali Dragon)"
     echo "  ./installer.sh -w ~/Downloads/bg.png     # Set custom wallpaper"
+    echo "  ./installer.sh --prompt classic          # Set classic user@host:~$ prompt"
+    echo "  ./installer.sh --prompt kali             # Set iconic Kali two-line prompt"
     echo "  ./installer.sh --update                  # Quick update without reinstalling"
     echo "  ./installer.sh --full                    # Complete first-time installation"
     echo "  set-wallpaper                            # Wallpaper menu anytime"
+    echo "  set-prompt                               # Prompt menu anytime"
     echo "  i3-update                                # Update anytime from terminal"
 }
 
@@ -348,6 +380,10 @@ case "$1" in
         change_wallpaper "$2"
         exit 0
         ;;
+    -p|--prompt)
+        change_prompt "$2"
+        exit 0
+        ;;
     -h|--help)
         show_help
         exit 0
@@ -361,9 +397,10 @@ case "$1" in
             echo "  2) Quick Update        (Update dotfiles & scripts only - Instant)"
             echo "  3) Git Pull & Update   (Pull latest from GitHub & update configs)"
             echo "  4) Switch Wallpaper    (Choose from 5 minimal wallpapers or custom)"
-            echo "  5) Exit"
+            echo "  5) Terminal Prompt     (Arrow / Classic Linux user@host / Kali)"
+            echo "  6) Exit"
             echo ""
-            read -rp "Select an option [1-5] (Default: 1): " choice
+            read -rp "Select an option [1-6] (Default: 1): " choice
             case "$choice" in
                 2)
                     quick_update
@@ -375,6 +412,9 @@ case "$1" in
                     change_wallpaper ""
                     ;;
                 5)
+                    change_prompt ""
+                    ;;
+                6)
                     echo "Aborted."
                     exit 0
                     ;;

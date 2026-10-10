@@ -127,6 +127,44 @@ This setup comes with **5 curated, aesthetic dark minimal wallpapers**:
 
 ---
 
+## 💻 Terminal Prompt Customization
+
+Choose between **4 terminal prompt styles** anytime:
+
+| Style | Description | Preview |
+|---|---|---|
+| **`arrow` (Default)** | Modern Oh-My-Zsh Minimal Arrow | `➜  ~ ` |
+| **`classic`** | Standard Linux prompt (Green user, Red root) | `kali@kali:~$ ` / `root@kali:~# ` |
+| **`kali`** | Iconic Kali Linux Two-Line prompt | `┌──(kali㉿kali)-[~]`<br>`└─$ ` |
+| **`compact`** | Compact brackets prompt | `[kali@kali ~]$ ` |
+
+### How to Switch Terminal Prompt:
+
+- **Instant Terminal Commands:**
+  Run directly inside your terminal:
+  ```bash
+  prompt-classic    # Switch to classic user@kali:~$
+  prompt-kali       # Switch to iconic Kali prompt
+  prompt-arrow      # Switch to minimal arrow (Default)
+  prompt-compact    # Switch to compact
+  ```
+
+- **Global CLI Command:**
+  ```bash
+  set-prompt classic       # Set classic prompt
+  set-prompt kali          # Set Kali two-line prompt
+  set-prompt arrow         # Set minimal arrow
+  set-prompt               # Interactive menu
+  ```
+
+- **Via Installer Flag:**
+  ```bash
+  bash installer.sh --prompt classic
+  bash installer.sh -p kali
+  ```
+
+---
+
 ## 🎨 Customization
 
 - **Transparency & Effects:**
@@ -135,4 +173,5 @@ This setup comes with **5 curated, aesthetic dark minimal wallpapers**:
   Custom status bar scripts are located in `~/.config/i3/scripts/`. Edit `~/.config/i3/i3blocks.conf` to add or modify widgets.
 - **Terminal Theme & Font:**
   Edit `~/.config/alacritty/alacritty.toml` (or `alacritty.yml`).
+
 
