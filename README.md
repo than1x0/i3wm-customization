@@ -2,7 +2,7 @@
 
 Modern, lightweight, and aesthetic i3wm setup customized for **Kali Linux** and **Debian 12+ (Bookworm / Testing)**.
 
-![Kali i3 Setup](./b.png)
+![Kali i3 Setup](./.wallpaper/2-kali-dragon.jpg)
 
 ---
 
@@ -11,7 +11,7 @@ Modern, lightweight, and aesthetic i3wm setup customized for **Kali Linux** and 
 - **Window Manager:** i3 with native gaps support (`i3-gaps`).
 - **Terminal:** Alacritty GPU-accelerated terminal (support for modern `alacritty.toml` & legacy `alacritty.yml`).
 - **Status Bar:** i3bar + i3blocks with dynamic CPU, RAM, Disk, Dynamic Bandwidth, and VPN/Local IP indicators.
-- **Compositor:** Modern `picom` (with fallback to `compton`) for clean shadows, fading, and window transparency.
+- **Compositor:** Modern `picom` optimized for clean shadows, fading, and window transparency without VM glitches.
 - **App Launcher:** Rofi with modern `.rasi` configuration and fuzzy application search.
 - **VM Integration:** Out-of-the-box clipboard and resolution auto-fix for VMware and VirtualBox.
 - **Audio & Brightness:** Multimedia keybindings support.
