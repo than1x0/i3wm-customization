@@ -143,6 +143,9 @@ bindsym $mod+Shift+Return exec thunar
 # Wallpaper selector shortcut (Rofi GUI)
 bindsym $mod+Shift+w exec ~/.config/i3/scripts/set_wallpaper.sh --rofi
 
+# Screen sleep & saver settings shortcut (Rofi GUI)
+bindsym $mod+Shift+s exec ~/.config/i3/scripts/screensaver_control.sh --rofi
+
 # Window borders & Gaps
 default_border pixel 2
 default_floating_border pixel 2
@@ -186,3 +189,7 @@ exec_always --no-startup-id ~/.config/i3/clipboard_fix.sh
 
 # 4. Hide mouse cursor when idle
 exec_always --no-startup-id unclutter -idle 3 -root &
+
+# 5. Disable Screen Blanking, Screensaver & DPMS Sleep (Prevents black screen in VM)
+exec_always --no-startup-id xset s off -dpms s noblank
+

@@ -165,6 +165,35 @@ Choose between **4 terminal prompt styles** anytime:
 
 ---
 
+---
+
+## 💤 Screen Sleep & Screen Saver Control (Anti-Blackout for VMs)
+
+In Virtual Machines (VMware Workstation, VirtualBox), X11 screen saver blanking and DPMS display sleep often cause virtual displays to turn pitch-black and freeze without waking up. 
+
+This customization **automatically disables DPMS and screen blanking by default** to keep your VM active. You can customize timeouts anytime:
+
+### Shortcuts & Commands:
+- **Graphical Menu (GUI):**
+  Press **`Win + Shift + s`** anywhere on your desktop to open the Rofi Sleep & Screen Saver menu.
+
+- **Terminal Commands:**
+  ```bash
+  set-screensaver off        # Completely disable screen sleep & blanking (Recommended for VM)
+  set-screensaver 15         # Turn off screen after 15 minutes of inactivity
+  set-screensaver 30         # Turn off screen after 30 minutes
+  set-screensaver status     # Display current sleep and DPMS state
+  set-screensaver            # Interactive selection menu
+  ```
+
+- **Via Installer Flag:**
+  ```bash
+  bash installer.sh --screensaver off
+  bash installer.sh -s 30
+  ```
+
+---
+
 ## 🎨 Customization
 
 - **Transparency & Effects:**
@@ -173,5 +202,6 @@ Choose between **4 terminal prompt styles** anytime:
   Custom status bar scripts are located in `~/.config/i3/scripts/`. Edit `~/.config/i3/i3blocks.conf` to add or modify widgets.
 - **Terminal Theme & Font:**
   Edit `~/.config/alacritty/alacritty.toml` (or `alacritty.yml`).
+
 
 

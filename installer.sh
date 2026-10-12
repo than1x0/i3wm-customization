@@ -92,6 +92,7 @@ install_packages() {
         zsh
         pulseaudio-utils
         xclip
+        x11-xserver-utils
         brightnessctl
         libnotify-bin
         
@@ -299,6 +300,33 @@ EOF" 2>/dev/null || true
         fi
     fi
 
+    # Permanently disable X11 Screen Blanking and DPMS at Xorg server level (Prevents VM Black Screen)
+    if [ -n "$SUDO" ] || [ "$EUID" -eq 0 ]; then
+        $SUDO mkdir -p /etc/X11/xorg.conf.d 2>/dev/null || true
+        $SUDO bash -c "cat <<'EOF' > /etc/X11/xorg.conf.d/10-serverflags.conf
+Section \"ServerFlags\"
+    Option \"BlankTime\" \"0\"
+    Option \"StandbyTime\" \"0\"
+    Option \"SuspendTime\" \"0\"
+    Option \"OffTime\" \"0\"
+    Option \"DPMS\" \"false\"
+EndSection
+EOF" 2>/dev/null || true
+    fi
+
+    # Immediately disable screen blanking & DPMS in active session if running
+    if [ -n "$DISPLAY" ] && command -v xset >/dev/null 2>&1; then
+        xset s off 2>/dev/null || true
+        xset -dpms 2>/dev/null || true
+        xset s noblank 2>/dev/null || true
+        xset s 0 0 2>/dev/null || true
+    fi
+
+    # Initialize default screensaver setting (off) if not present
+    if [ ! -f "$TARGET_HOME/.config/i3/screensaver_config" ]; then
+        echo "off" > "$TARGET_HOME/.config/i3/screensaver_config"
+    fi
+
     install_cli_tools
 }
 
@@ -335,6 +363,11 @@ EOF
     ln -sf "$TARGET_HOME/.config/i3/scripts/set_prompt.sh" "$PROMPT_SCRIPT"
     ln -sf "$TARGET_HOME/.config/i3/scripts/set_prompt.sh" "$TARGET_HOME/.local/bin/i3-prompt"
 
+    # 4. Global Screensaver & Sleep Controller Script
+    SAVER_SCRIPT="$TARGET_HOME/.local/bin/set-screensaver"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/screensaver_control.sh" "$SAVER_SCRIPT"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/screensaver_control.sh" "$TARGET_HOME/.local/bin/i3-screensaver"
+
     # Link to /usr/local/bin if root or sudo is available so it's in system PATH
     if [ -n "$SUDO" ] || [ "$EUID" -eq 0 ]; then
         $SUDO ln -sf "$UPDATER_SCRIPT" /usr/local/bin/i3-update 2>/dev/null || true
@@ -342,6 +375,8 @@ EOF
         $SUDO ln -sf "$WALL_SCRIPT" /usr/local/bin/i3-wallpaper 2>/dev/null || true
         $SUDO ln -sf "$PROMPT_SCRIPT" /usr/local/bin/set-prompt 2>/dev/null || true
         $SUDO ln -sf "$PROMPT_SCRIPT" /usr/local/bin/i3-prompt 2>/dev/null || true
+        $SUDO ln -sf "$SAVER_SCRIPT" /usr/local/bin/set-screensaver 2>/dev/null || true
+        $SUDO ln -sf "$SAVER_SCRIPT" /usr/local/bin/i3-screensaver 2>/dev/null || true
     fi
 }
 
@@ -441,6 +476,14 @@ change_prompt() {
     bash "$HOME/.config/i3/scripts/set_prompt.sh" "$TARGET_STYLE"
 }
 
+change_screensaver() {
+    TARGET_VAL="$1"
+    if [ ! -f "$HOME/.config/i3/scripts/screensaver_control.sh" ]; then
+        deploy_configs
+    fi
+    bash "$HOME/.config/i3/scripts/screensaver_control.sh" "$TARGET_VAL"
+}
+
 show_help() {
     echo "Kali Linux & Debian i3wm Customization Installer & Updater"
     echo ""
@@ -452,6 +495,7 @@ show_help() {
     echo "  -f, --full                   Run full installation (Packages, fonts, dotfiles)"
     echo "  -w, --wallpaper [1-5|PATH]   Switch wallpaper (1-5 for minimal presets, or path to custom image)"
     echo "  -p, --prompt [1-4|STYLE]     Switch terminal prompt style (arrow, classic, kali, compact)"
+    echo "  -s, --screensaver [off|15|30] Control screen sleep / blanking (off recommended for VM)"
     echo "  -h, --help                   Show this help message"
     echo ""
     echo "Examples:"
@@ -459,10 +503,12 @@ show_help() {
     echo "  ./installer.sh -w ~/Downloads/bg.png     # Set custom wallpaper"
     echo "  ./installer.sh --prompt classic          # Set classic user@host:~$ prompt"
     echo "  ./installer.sh --prompt kali             # Set iconic Kali two-line prompt"
+    echo "  ./installer.sh --screensaver off         # Disable screen blanking & sleep (Always On)"
     echo "  ./installer.sh --update                  # Quick update without reinstalling"
     echo "  ./installer.sh --full                    # Complete first-time installation"
     echo "  set-wallpaper                            # Wallpaper menu anytime"
     echo "  set-prompt                               # Prompt menu anytime"
+    echo "  set-screensaver                          # Screen sleep menu anytime"
     echo "  i3-update                                # Update anytime from terminal"
 }
 
@@ -491,6 +537,10 @@ case "$1" in
         change_prompt "$2"
         exit 0
         ;;
+    -s|--screensaver)
+        change_screensaver "$2"
+        exit 0
+        ;;
     -h|--help)
         show_help
         exit 0
@@ -505,9 +555,10 @@ case "$1" in
             echo "  3) Git Pull & Update   (Pull latest from GitHub & update configs)"
             echo "  4) Switch Wallpaper    (Choose from 5 minimal wallpapers or custom)"
             echo "  5) Terminal Prompt     (Arrow / Classic Linux user@host / Kali)"
-            echo "  6) Exit"
+            echo "  6) Screen Saver/Sleep  (Disable sleep or set timeout)"
+            echo "  7) Exit"
             echo ""
-            read -rp "Select an option [1-6] (Default: 1): " choice
+            read -rp "Select an option [1-7] (Default: 1): " choice
             case "$choice" in
                 2)
                     quick_update
@@ -522,6 +573,9 @@ case "$1" in
                     change_prompt ""
                     ;;
                 6)
+                    change_screensaver ""
+                    ;;
+                7)
                     echo "Aborted."
                     exit 0
                     ;;
