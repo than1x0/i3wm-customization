@@ -133,6 +133,14 @@ install_zsh() {
         echo "[+] Installing Oh My Zsh (unattended mode)..."
         RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
     fi
+
+    # Ensure default login shell is zsh
+    ZSH_BIN=$(command -v zsh || echo "/bin/zsh")
+    if [ -x "$ZSH_BIN" ]; then
+        TARGET_USER="${SUDO_USER:-$USER}"
+        echo "[+] Ensuring default login shell is zsh for $TARGET_USER..."
+        $SUDO chsh -s "$ZSH_BIN" "$TARGET_USER" 2>/dev/null || chsh -s "$ZSH_BIN" "$TARGET_USER" 2>/dev/null || true
+    fi
 }
 
 backup_configs() {
@@ -183,16 +191,28 @@ deploy_configs() {
         echo "arrow" > "$HOME/.config/i3/prompt_style"
     fi
 
-    # Integrate custom prompt with ~/.zshrc and ~/.bashrc
-    for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-        if [ -f "$rc" ] && ! grep -q "prompt.zsh" "$rc" 2>/dev/null; then
-            cat <<'EOF' >> "$rc"
+    # Integrate custom prompt with ~/.zshrc (ZSH)
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "prompt.zsh" "$HOME/.zshrc" 2>/dev/null; then
+            cat <<'EOF' >> "$HOME/.zshrc"
 
-# Kali i3wm Custom Prompt
+# Kali i3wm Custom Prompt Hook (ZSH)
 [ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"
 EOF
         fi
-    done
+    fi
+
+    # Integrate custom prompt with ~/.bashrc (Bash)
+    if [ -f "$HOME/.bashrc" ]; then
+        sed -i '/prompt\.zsh/d' "$HOME/.bashrc" 2>/dev/null || true
+        if ! grep -q "prompt.sh" "$HOME/.bashrc" 2>/dev/null; then
+            cat <<'EOF' >> "$HOME/.bashrc"
+
+# Kali i3wm Custom Prompt Hook (Bash)
+[ -f "$HOME/.config/i3/scripts/prompt.sh" ] && source "$HOME/.config/i3/scripts/prompt.sh"
+EOF
+        fi
+    fi
 
     install_cli_tools
 }

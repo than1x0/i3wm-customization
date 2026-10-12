@@ -1,6 +1,9 @@
 # Alacritty Modern TOML Configuration (Alacritty >= 0.13)
 # Fully compatible with Kali Linux and Debian 12 (Bookworm)
 
+[terminal.shell]
+program = "/bin/zsh"
+
 [window]
 padding = { x = 6, y = 6 }
 dynamic_padding = true

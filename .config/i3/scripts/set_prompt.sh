@@ -3,6 +3,7 @@
 # ==============================================================================
 # Kali Linux & Debian i3wm Terminal Prompt Switcher
 # Switch between Minimal Arrow, Classic Linux, and Iconic Kali prompt styles
+# Supports both ZSH (with Oh My Zsh) and BASH!
 # ==============================================================================
 
 set -e
@@ -12,34 +13,38 @@ PROMPT_STYLE_FILE="$HOME/.config/i3/prompt_style"
 mkdir -p "$HOME/.config/i3/scripts"
 
 ensure_prompt_configured() {
-    # 1. Ensure prompt.zsh exists in ~/.config/i3/scripts/
-    if [ ! -f "$HOME/.config/i3/scripts/prompt.zsh" ]; then
-        if [ -f "$SCRIPT_DIR/prompt.zsh" ]; then
-            cp "$SCRIPT_DIR/prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
-        elif [ -f "$SCRIPT_DIR/../prompt.zsh" ]; then
-            cp "$SCRIPT_DIR/../prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
-        elif [ -f "$SCRIPT_DIR/.config/i3/scripts/prompt.zsh" ]; then
-            cp "$SCRIPT_DIR/.config/i3/scripts/prompt.zsh" "$HOME/.config/i3/scripts/prompt.zsh"
+    # 1. Ensure prompt.zsh and prompt.sh exist in ~/.config/i3/scripts/
+    for script_name in "prompt.zsh" "prompt.sh"; do
+        if [ ! -f "$HOME/.config/i3/scripts/$script_name" ]; then
+            if [ -f "$SCRIPT_DIR/$script_name" ]; then
+                cp "$SCRIPT_DIR/$script_name" "$HOME/.config/i3/scripts/$script_name"
+            elif [ -f "$SCRIPT_DIR/../$script_name" ]; then
+                cp "$SCRIPT_DIR/../$script_name" "$HOME/.config/i3/scripts/$script_name"
+            elif [ -f "$SCRIPT_DIR/.config/i3/scripts/$script_name" ]; then
+                cp "$SCRIPT_DIR/.config/i3/scripts/$script_name" "$HOME/.config/i3/scripts/$script_name"
+            fi
         fi
-    fi
+    done
 
-    # 2. Add hook to ~/.zshrc if not present
+    # 2. Add hook to ~/.zshrc for ZSH
     ZSHRC="$HOME/.zshrc"
     if [ -f "$ZSHRC" ]; then
         if ! grep -q "prompt.zsh" "$ZSHRC" 2>/dev/null; then
             echo "" >> "$ZSHRC"
-            echo "# Kali i3wm Custom Prompt Hook" >> "$ZSHRC"
+            echo "# Kali i3wm Custom Prompt Hook (ZSH)" >> "$ZSHRC"
             echo '[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"' >> "$ZSHRC"
         fi
     fi
 
-    # 3. Add hook to ~/.bashrc for bash fallback
+    # 3. Add hook to ~/.bashrc for BASH
     BASHRC="$HOME/.bashrc"
     if [ -f "$BASHRC" ]; then
-        if ! grep -q "prompt.zsh" "$BASHRC" 2>/dev/null; then
+        # Clean up any legacy incorrect prompt.zsh in .bashrc
+        sed -i '/prompt\.zsh/d' "$BASHRC" 2>/dev/null || true
+        if ! grep -q "prompt.sh" "$BASHRC" 2>/dev/null; then
             echo "" >> "$BASHRC"
-            echo "# Kali i3wm Custom Prompt Hook" >> "$BASHRC"
-            echo '[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"' >> "$BASHRC"
+            echo "# Kali i3wm Custom Prompt Hook (Bash)" >> "$BASHRC"
+            echo '[ -f "$HOME/.config/i3/scripts/prompt.sh" ] && source "$HOME/.config/i3/scripts/prompt.sh"' >> "$BASHRC"
         fi
     fi
 }
@@ -52,8 +57,15 @@ apply_prompt() {
     echo "$style" > "$PROMPT_STYLE_FILE"
 
     echo "[✔] Terminal prompt set to: $name"
-    echo "[✔] ~/.zshrc prompt integration verified."
-    echo "[i] Run 'source ~/.zshrc' (or 'exec zsh') to apply to this terminal."
+    echo "[✔] ~/.zshrc and ~/.bashrc prompt integration verified."
+    
+    # Context-aware tip based on current shell
+    if [ -n "$BASH_VERSION" ]; then
+        echo "[i] Current shell is BASH. Run 'source ~/.bashrc' to apply."
+        echo "[i] Or type 'zsh' to launch Oh My Zsh."
+    else
+        echo "[i] Current shell is ZSH. Run 'source ~/.zshrc' (or 'exec zsh') to apply."
+    fi
 
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "Terminal Prompt Updated" "$name" -i utilities-terminal 2>/dev/null || true
@@ -108,7 +120,7 @@ case "$STYLE" in
         echo "Usage: set-prompt [1-4 | arrow | classic | kali | compact]"
         echo ""
         echo "Available Styles:"
-        echo "  1, arrow       Minimal Arrow (Default OMZ style): ➜  ~ "
+        echo "  1, arrow       Minimal Arrow: ➜  ~ "
         echo "  2, classic     Classic Linux: user@kali:~$ (root@kali:~#)"
         echo "  3, kali        Iconic Kali: ┌──(user㉿kali)-[~] \n └─$ "
         echo "  4, compact     Compact: [user@kali ~]$ "
