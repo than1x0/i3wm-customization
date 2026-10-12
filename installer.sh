@@ -9,6 +9,17 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Global SUDO helper initialization
+if [ "$EUID" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+        SUDO="sudo"
+    else
+        SUDO=""
+    fi
+else
+    SUDO=""
+fi
+
 # ------------------------------------------------------------------------------
 # Helper Functions
 # ------------------------------------------------------------------------------
@@ -156,45 +167,54 @@ backup_configs() {
 }
 
 deploy_configs() {
-    echo "[+] Deploying dotfiles to $HOME/.config/..."
-    mkdir -p "$HOME/.config/i3/scripts"
-    mkdir -p "$HOME/.config/picom"
-    mkdir -p "$HOME/.config/rofi"
-    mkdir -p "$HOME/.config/alacritty"
-    mkdir -p "$HOME/.wallpaper"
-    mkdir -p "$HOME/.local/bin"
+    TARGET_USER="${SUDO_USER:-$USER}"
+    if [ "$EUID" -eq 0 ] && [ "$TARGET_USER" == "root" ]; then
+        PRIMARY_USER=$(ls -1 /home 2>/dev/null | grep -v 'lost+found' | head -n 1)
+        if [ -n "$PRIMARY_USER" ] && [ -d "/home/$PRIMARY_USER" ]; then
+            TARGET_USER="$PRIMARY_USER"
+        fi
+    fi
+    TARGET_HOME=$(eval echo "~$TARGET_USER")
+
+    echo "[+] Deploying dotfiles to $TARGET_HOME/.config/..."
+    mkdir -p "$TARGET_HOME/.config/i3/scripts"
+    mkdir -p "$TARGET_HOME/.config/picom"
+    mkdir -p "$TARGET_HOME/.config/rofi"
+    mkdir -p "$TARGET_HOME/.config/alacritty"
+    mkdir -p "$TARGET_HOME/.wallpaper"
+    mkdir -p "$TARGET_HOME/.local/bin"
 
     # Copy configurations
-    cp "$SCRIPT_DIR/.config/i3/config" "$HOME/.config/i3/config"
-    cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$HOME/.config/i3/i3blocks.conf"
-    cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$HOME/.config/i3/clipboard_fix.sh"
-    cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$HOME/.config/i3/scripts/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/.config/i3/scripts/"*.zsh "$HOME/.config/i3/scripts/" 2>/dev/null || true
+    cp "$SCRIPT_DIR/.config/i3/config" "$TARGET_HOME/.config/i3/config"
+    cp "$SCRIPT_DIR/.config/i3/i3blocks.conf" "$TARGET_HOME/.config/i3/i3blocks.conf"
+    cp "$SCRIPT_DIR/.config/i3/clipboard_fix.sh" "$TARGET_HOME/.config/i3/clipboard_fix.sh"
+    cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh "$TARGET_HOME/.config/i3/scripts/" 2>/dev/null || true
+    cp "$SCRIPT_DIR/.config/i3/scripts/"*.zsh "$TARGET_HOME/.config/i3/scripts/" 2>/dev/null || true
 
-    cp "$SCRIPT_DIR/.config/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+    cp "$SCRIPT_DIR/.config/picom/picom.conf" "$TARGET_HOME/.config/picom/picom.conf"
 
-    cp "$SCRIPT_DIR/.config/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
-    cp "$SCRIPT_DIR/.config/alacritty/alacritty.yml" "$HOME/.config/alacritty/alacritty.yml"
+    cp "$SCRIPT_DIR/.config/alacritty/alacritty.toml" "$TARGET_HOME/.config/alacritty/alacritty.toml"
+    cp "$SCRIPT_DIR/.config/alacritty/alacritty.yml" "$TARGET_HOME/.config/alacritty/alacritty.yml"
 
-    cp "$SCRIPT_DIR/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
+    cp "$SCRIPT_DIR/.config/rofi/config.rasi" "$TARGET_HOME/.config/rofi/config.rasi"
 
-    cp "$SCRIPT_DIR/.fehbg" "$HOME/.fehbg"
-    cp -r "$SCRIPT_DIR/.wallpaper/"* "$HOME/.wallpaper/"
+    cp "$SCRIPT_DIR/.fehbg" "$TARGET_HOME/.fehbg"
+    cp -r "$SCRIPT_DIR/.wallpaper/"* "$TARGET_HOME/.wallpaper/"
 
     # Set executable permissions
-    chmod +x "$HOME/.fehbg"
-    chmod +x "$HOME/.config/i3/clipboard_fix.sh"
-    chmod +x "$HOME/.config/i3/scripts/"*.sh
+    chmod +x "$TARGET_HOME/.fehbg"
+    chmod +x "$TARGET_HOME/.config/i3/clipboard_fix.sh"
+    chmod +x "$TARGET_HOME/.config/i3/scripts/"*.sh
 
     # Initialize default prompt style (Minimal Arrow) if not already configured
-    if [ ! -f "$HOME/.config/i3/prompt_style" ]; then
-        echo "arrow" > "$HOME/.config/i3/prompt_style"
+    if [ ! -f "$TARGET_HOME/.config/i3/prompt_style" ]; then
+        echo "arrow" > "$TARGET_HOME/.config/i3/prompt_style"
     fi
 
     # Integrate custom prompt with ~/.zshrc (ZSH)
-    if [ -f "$HOME/.zshrc" ]; then
-        if ! grep -q "prompt.zsh" "$HOME/.zshrc" 2>/dev/null; then
-            cat <<'EOF' >> "$HOME/.zshrc"
+    if [ -f "$TARGET_HOME/.zshrc" ]; then
+        if ! grep -q "prompt.zsh" "$TARGET_HOME/.zshrc" 2>/dev/null; then
+            cat <<'EOF' >> "$TARGET_HOME/.zshrc"
 
 # Kali i3wm Custom Prompt Hook (ZSH)
 [ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"
@@ -203,14 +223,79 @@ EOF
     fi
 
     # Integrate custom prompt with ~/.bashrc (Bash)
-    if [ -f "$HOME/.bashrc" ]; then
-        sed -i '/prompt\.zsh/d' "$HOME/.bashrc" 2>/dev/null || true
-        if ! grep -q "prompt.sh" "$HOME/.bashrc" 2>/dev/null; then
-            cat <<'EOF' >> "$HOME/.bashrc"
+    if [ -f "$TARGET_HOME/.bashrc" ]; then
+        sed -i '/prompt\.zsh/d' "$TARGET_HOME/.bashrc" 2>/dev/null || true
+        if ! grep -q "prompt.sh" "$TARGET_HOME/.bashrc" 2>/dev/null; then
+            cat <<'EOF' >> "$TARGET_HOME/.bashrc"
 
 # Kali i3wm Custom Prompt Hook (Bash)
 [ -f "$HOME/.config/i3/scripts/prompt.sh" ] && source "$HOME/.config/i3/scripts/prompt.sh"
 EOF
+        fi
+    fi
+
+    # Fix ownership if running as root for a normal user
+    if [ "$EUID" -eq 0 ] && [ "$TARGET_USER" != "root" ]; then
+        chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config/i3" "$TARGET_HOME/.config/picom" "$TARGET_HOME/.config/rofi" "$TARGET_HOME/.config/alacritty" "$TARGET_HOME/.wallpaper" "$TARGET_HOME/.local" "$TARGET_HOME/.fehbg" "$TARGET_HOME/.bashrc" "$TARGET_HOME/.zshrc" 2>/dev/null || true
+    fi
+
+    # Deploy prompt configuration to /root for seamless sudo su / root experience
+    if [ -d "/root" ]; then
+        $SUDO mkdir -p /root/.config/i3/scripts 2>/dev/null || true
+        $SUDO cp "$SCRIPT_DIR/.config/i3/scripts/"*.sh /root/.config/i3/scripts/ 2>/dev/null || true
+        $SUDO cp "$SCRIPT_DIR/.config/i3/scripts/"*.zsh /root/.config/i3/scripts/ 2>/dev/null || true
+        $SUDO chmod +x /root/.config/i3/scripts/*.sh 2>/dev/null || true
+
+        # Sync prompt style to /root
+        [ -f "$TARGET_HOME/.config/i3/prompt_style" ] && $SUDO cp "$TARGET_HOME/.config/i3/prompt_style" /root/.config/i3/prompt_style 2>/dev/null || true
+
+        # Inject hook into /root/.bashrc
+        if $SUDO test -f /root/.bashrc; then
+            $SUDO sed -i '/prompt\.zsh/d' /root/.bashrc 2>/dev/null || true
+            if ! $SUDO grep -q "prompt.sh" /root/.bashrc 2>/dev/null; then
+                $SUDO bash -c "cat <<'EOF' >> /root/.bashrc
+
+# Kali i3wm Custom Prompt Hook (Bash)
+if [ -f \"\$HOME/.config/i3/scripts/prompt.sh\" ]; then
+    source \"\$HOME/.config/i3/scripts/prompt.sh\"
+elif [ -n \"\$SUDO_USER\" ] && [ -f \"/home/\$SUDO_USER/.config/i3/scripts/prompt.sh\" ]; then
+    source \"/home/\$SUDO_USER/.config/i3/scripts/prompt.sh\"
+fi
+EOF" 2>/dev/null || true
+            fi
+        fi
+
+        # Inject hook into /root/.zshrc
+        if $SUDO test -f /root/.zshrc; then
+            if ! $SUDO grep -q "prompt.zsh" /root/.zshrc 2>/dev/null; then
+                $SUDO bash -c "cat <<'EOF' >> /root/.zshrc
+
+# Kali i3wm Custom Prompt Hook (ZSH)
+if [ -f \"\$HOME/.config/i3/scripts/prompt.zsh\" ]; then
+    source \"\$HOME/.config/i3/scripts/prompt.zsh\"
+elif [ -n \"\$SUDO_USER\" ] && [ -f \"/home/\$SUDO_USER/.config/i3/scripts/prompt.zsh\" ]; then
+    source \"/home/\$SUDO_USER/.config/i3/scripts/prompt.zsh\"
+fi
+EOF" 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    # Deploy to /etc/skel so any new users created via adduser inherit the prompt hooks
+    if [ -d "/etc/skel" ]; then
+        if $SUDO test -f /etc/skel/.bashrc && ! $SUDO grep -q "prompt.sh" /etc/skel/.bashrc 2>/dev/null; then
+            $SUDO bash -c "cat <<'EOF' >> /etc/skel/.bashrc
+
+# Kali i3wm Custom Prompt Hook (Bash)
+[ -f \"\$HOME/.config/i3/scripts/prompt.sh\" ] && source \"\$HOME/.config/i3/scripts/prompt.sh\"
+EOF" 2>/dev/null || true
+        fi
+        if $SUDO test -f /etc/skel/.zshrc && ! $SUDO grep -q "prompt.zsh" /etc/skel/.zshrc 2>/dev/null; then
+            $SUDO bash -c "cat <<'EOF' >> /etc/skel/.zshrc
+
+# Kali i3wm Custom Prompt Hook (ZSH)
+[ -f \"\$HOME/.config/i3/scripts/prompt.zsh\" ] && source \"\$HOME/.config/i3/scripts/prompt.zsh\"
+EOF" 2>/dev/null || true
         fi
     fi
 
@@ -219,7 +304,7 @@ EOF
 
 install_cli_tools() {
     # 1. Global Updater Script
-    UPDATER_SCRIPT="$HOME/.local/bin/i3-update"
+    UPDATER_SCRIPT="$TARGET_HOME/.local/bin/i3-update"
     cat <<EOF > "$UPDATER_SCRIPT"
 #!/usr/bin/env bash
 # Global quick updater for Kali i3 Customization
@@ -241,22 +326,22 @@ EOF
     chmod +x "$UPDATER_SCRIPT"
 
     # 2. Global Wallpaper Switcher Script
-    WALL_SCRIPT="$HOME/.local/bin/set-wallpaper"
-    ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$WALL_SCRIPT"
-    ln -sf "$HOME/.config/i3/scripts/set_wallpaper.sh" "$HOME/.local/bin/i3-wallpaper"
+    WALL_SCRIPT="$TARGET_HOME/.local/bin/set-wallpaper"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/set_wallpaper.sh" "$WALL_SCRIPT"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/set_wallpaper.sh" "$TARGET_HOME/.local/bin/i3-wallpaper"
 
     # 3. Global Terminal Prompt Switcher Script
-    PROMPT_SCRIPT="$HOME/.local/bin/set-prompt"
-    ln -sf "$HOME/.config/i3/scripts/set_prompt.sh" "$PROMPT_SCRIPT"
-    ln -sf "$HOME/.config/i3/scripts/set_prompt.sh" "$HOME/.local/bin/i3-prompt"
+    PROMPT_SCRIPT="$TARGET_HOME/.local/bin/set-prompt"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/set_prompt.sh" "$PROMPT_SCRIPT"
+    ln -sf "$TARGET_HOME/.config/i3/scripts/set_prompt.sh" "$TARGET_HOME/.local/bin/i3-prompt"
 
     # Link to /usr/local/bin if root or sudo is available so it's in system PATH
-    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-        sudo ln -sf "$UPDATER_SCRIPT" /usr/local/bin/i3-update 2>/dev/null || true
-        sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/set-wallpaper 2>/dev/null || true
-        sudo ln -sf "$WALL_SCRIPT" /usr/local/bin/i3-wallpaper 2>/dev/null || true
-        sudo ln -sf "$PROMPT_SCRIPT" /usr/local/bin/set-prompt 2>/dev/null || true
-        sudo ln -sf "$PROMPT_SCRIPT" /usr/local/bin/i3-prompt 2>/dev/null || true
+    if [ -n "$SUDO" ] || [ "$EUID" -eq 0 ]; then
+        $SUDO ln -sf "$UPDATER_SCRIPT" /usr/local/bin/i3-update 2>/dev/null || true
+        $SUDO ln -sf "$WALL_SCRIPT" /usr/local/bin/set-wallpaper 2>/dev/null || true
+        $SUDO ln -sf "$WALL_SCRIPT" /usr/local/bin/i3-wallpaper 2>/dev/null || true
+        $SUDO ln -sf "$PROMPT_SCRIPT" /usr/local/bin/set-prompt 2>/dev/null || true
+        $SUDO ln -sf "$PROMPT_SCRIPT" /usr/local/bin/i3-prompt 2>/dev/null || true
     fi
 }
 

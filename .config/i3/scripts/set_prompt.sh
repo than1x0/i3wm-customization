@@ -4,6 +4,7 @@
 # Kali Linux & Debian i3wm Terminal Prompt Switcher
 # Switch between Minimal Arrow, Classic Linux, and Iconic Kali prompt styles
 # Supports both ZSH (with Oh My Zsh) and BASH!
+# Fully synchronizes across regular user and root sessions!
 # ==============================================================================
 
 set -e
@@ -47,6 +48,25 @@ ensure_prompt_configured() {
             echo '[ -f "$HOME/.config/i3/scripts/prompt.sh" ] && source "$HOME/.config/i3/scripts/prompt.sh"' >> "$BASHRC"
         fi
     fi
+
+    # 4. If running as root, also ensure /root has the scripts and hooks
+    if [ "$EUID" -eq 0 ]; then
+        mkdir -p /root/.config/i3/scripts
+        [ -f "$HOME/.config/i3/scripts/prompt.sh" ] && cp "$HOME/.config/i3/scripts/prompt.sh" /root/.config/i3/scripts/prompt.sh 2>/dev/null || true
+        [ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && cp "$HOME/.config/i3/scripts/prompt.zsh" /root/.config/i3/scripts/prompt.zsh 2>/dev/null || true
+        chmod +x /root/.config/i3/scripts/*.sh 2>/dev/null || true
+
+        if [ -f /root/.bashrc ] && ! grep -q "prompt.sh" /root/.bashrc 2>/dev/null; then
+            echo "" >> /root/.bashrc
+            echo "# Kali i3wm Custom Prompt Hook (Bash)" >> /root/.bashrc
+            echo '[ -f "$HOME/.config/i3/scripts/prompt.sh" ] && source "$HOME/.config/i3/scripts/prompt.sh"' >> /root/.bashrc
+        fi
+        if [ -f /root/.zshrc ] && ! grep -q "prompt.zsh" /root/.zshrc 2>/dev/null; then
+            echo "" >> /root/.zshrc
+            echo "# Kali i3wm Custom Prompt Hook (ZSH)" >> /root/.zshrc
+            echo '[ -f "$HOME/.config/i3/scripts/prompt.zsh" ] && source "$HOME/.config/i3/scripts/prompt.zsh"' >> /root/.zshrc
+        fi
+    fi
 }
 
 apply_prompt() {
@@ -55,6 +75,27 @@ apply_prompt() {
 
     ensure_prompt_configured
     echo "$style" > "$PROMPT_STYLE_FILE"
+
+    # Sync prompt style across root and primary user if permissions allow
+    if [ "$EUID" -eq 0 ]; then
+        if [ -n "$SUDO_USER" ] && [ -d "/home/$SUDO_USER/.config/i3" ]; then
+            echo "$style" > "/home/$SUDO_USER/.config/i3/prompt_style"
+            chown "$SUDO_USER:$SUDO_USER" "/home/$SUDO_USER/.config/i3/prompt_style" 2>/dev/null || true
+        else
+            for u_home in /home/*; do
+                if [ -d "$u_home/.config/i3" ]; then
+                    echo "$style" > "$u_home/.config/i3/prompt_style"
+                    u_owner=$(stat -c '%U:%G' "$u_home" 2>/dev/null || echo "")
+                    [ -n "$u_owner" ] && chown "$u_owner" "$u_home/.config/i3/prompt_style" 2>/dev/null || true
+                fi
+            done
+        fi
+    elif command -v sudo >/dev/null 2>&1; then
+        if sudo -n true 2>/dev/null; then
+            sudo mkdir -p /root/.config/i3 2>/dev/null || true
+            echo "$style" | sudo tee /root/.config/i3/prompt_style >/dev/null 2>&1 || true
+        fi
+    fi
 
     echo "[✔] Terminal prompt set to: $name"
     echo "[✔] ~/.zshrc and ~/.bashrc prompt integration verified."

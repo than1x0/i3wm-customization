@@ -1,18 +1,39 @@
 # ==============================================================================
-# Kali Linux & Debian i3wm Custom Prompt Configuration
-# Dynamically loads and switches terminal prompt styles
+# Kali Linux & Debian i3wm Custom Prompt Configuration (ZSH)
+# Dynamically loads and switches terminal prompt styles in ZSH
+# Fully supports regular users, root, and sudo su sessions
 # ==============================================================================
 
-PROMPT_STYLE_FILE="$HOME/.config/i3/prompt_style"
+_get_kali_zsh_prompt_style() {
+    local style_file="$HOME/.config/i3/prompt_style"
+    if [[ $EUID -eq 0 ]]; then
+        if [[ -n "$SUDO_USER" ]] && [[ -f "/home/$SUDO_USER/.config/i3/prompt_style" ]]; then
+            style_file="/home/$SUDO_USER/.config/i3/prompt_style"
+        elif [[ ! -f "$style_file" ]]; then
+            for u_style in /home/*/.config/i3/prompt_style; do
+                if [[ -f "$u_style" ]]; then
+                    style_file="$u_style"
+                    break
+                fi
+            done
+        fi
+    fi
+
+    if [[ -f "$style_file" ]]; then
+        cat "$style_file" 2>/dev/null || echo "arrow"
+    else
+        echo "arrow"
+    fi
+}
 
 _apply_kali_prompt() {
-    local style="arrow"
-    [ -f "$PROMPT_STYLE_FILE" ] && style=$(cat "$PROMPT_STYLE_FILE" 2>/dev/null)
+    local style
+    style=$(_get_kali_zsh_prompt_style)
 
     case "$style" in
         classic|2)
             # Classic Linux: user@host:path$ (Green for user, Red for root)
-            if [ "$EUID" -eq 0 ]; then
+            if [[ $EUID -eq 0 ]]; then
                 PROMPT='%F{red}%n@%m%f:%F{blue}%~%f# '
             else
                 PROMPT='%F{green}%n@%m%f:%F{blue}%~%f$ '
@@ -20,7 +41,7 @@ _apply_kali_prompt() {
             ;;
         kali|3)
             # Iconic Kali Linux Two-Line prompt
-            if [ "$EUID" -eq 0 ]; then
+            if [[ $EUID -eq 0 ]]; then
                 PROMPT=$'┌──(%F{red}%n㉿%m%f)-[%F{blue}%~%f]\n└─%F{red}#%f '
             else
                 PROMPT=$'┌──(%F{blue}%n㉿%m%f)-[%F{cyan}%~%f]\n└─$ '
@@ -28,14 +49,22 @@ _apply_kali_prompt() {
             ;;
         compact|4)
             # Compact brackets: [user@host dir]$
-            PROMPT='%F{magenta}[%n@%m %1~]%f%# '
+            if [[ $EUID -eq 0 ]]; then
+                PROMPT='%F{red}[%n@%m %1~]%f# '
+            else
+                PROMPT='%F{magenta}[%n@%m %1~]%f%# '
+            fi
             ;;
         arrow|1|*)
             # Default Minimal Arrow (Oh-My-Zsh style)
-            if type git_prompt_info >/dev/null 2>&1; then
-                PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f $(git_prompt_info)'
+            if [[ $EUID -eq 0 ]]; then
+                PROMPT='%(?:%F{red}➜ :%F{yellow}➜ ) %F{cyan}%c%f # '
             else
-                PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f '
+                if type git_prompt_info >/dev/null 2>&1; then
+                    PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f $(git_prompt_info)'
+                else
+                    PROMPT='%(?:%F{green}➜ :%F{red}➜ ) %F{cyan}%c%f '
+                fi
             fi
             ;;
     esac
@@ -53,8 +82,12 @@ fi
 set-prompt() {
     if [ -x "$HOME/.config/i3/scripts/set_prompt.sh" ]; then
         "$HOME/.config/i3/scripts/set_prompt.sh" "$@"
+    elif [ -n "$SUDO_USER" ] && [ -x "/home/$SUDO_USER/.config/i3/scripts/set_prompt.sh" ]; then
+        "/home/$SUDO_USER/.config/i3/scripts/set_prompt.sh" "$@"
     elif [ -x "$HOME/.local/bin/set-prompt" ]; then
         "$HOME/.local/bin/set-prompt" "$@"
+    elif [ -x "/usr/local/bin/set-prompt" ]; then
+        "/usr/local/bin/set-prompt" "$@"
     fi
     _apply_kali_prompt
     zle && zle reset-prompt 2>/dev/null || true

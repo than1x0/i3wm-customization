@@ -1,13 +1,34 @@
 # ==============================================================================
 # Kali Linux & Debian i3wm Custom Prompt Configuration (Bash)
 # Dynamically loads and switches terminal prompt styles in Bash
+# Fully supports regular users, root, and sudo su sessions
 # ==============================================================================
 
-PROMPT_STYLE_FILE="$HOME/.config/i3/prompt_style"
+_get_kali_bash_prompt_style() {
+    local style_file="$HOME/.config/i3/prompt_style"
+    if [ "$EUID" -eq 0 ]; then
+        if [ -n "$SUDO_USER" ] && [ -f "/home/$SUDO_USER/.config/i3/prompt_style" ]; then
+            style_file="/home/$SUDO_USER/.config/i3/prompt_style"
+        elif [ ! -f "$style_file" ]; then
+            for u_style in /home/*/.config/i3/prompt_style; do
+                if [ -f "$u_style" ]; then
+                    style_file="$u_style"
+                    break
+                fi
+            done
+        fi
+    fi
+
+    if [ -f "$style_file" ]; then
+        cat "$style_file" 2>/dev/null || echo "arrow"
+    else
+        echo "arrow"
+    fi
+}
 
 _apply_kali_bash_prompt() {
-    local style="arrow"
-    [ -f "$PROMPT_STYLE_FILE" ] && style=$(cat "$PROMPT_STYLE_FILE" 2>/dev/null)
+    local style
+    style=$(_get_kali_bash_prompt_style)
 
     case "$style" in
         classic|2)
@@ -28,11 +49,19 @@ _apply_kali_bash_prompt() {
             ;;
         compact|4)
             # Compact brackets: [user@host dir]$
-            PS1='\[\033[01;35m\][\u@\h \W]\$\[\033[00m\] '
+            if [ "$EUID" -eq 0 ]; then
+                PS1='\[\033[01;31m\][\u@\h \W]#\[\033[00m\] '
+            else
+                PS1='\[\033[01;35m\][\u@\h \W]\$\[\033[00m\] '
+            fi
             ;;
         arrow|1|*)
             # Minimal Arrow style in Bash
-            PS1='\[\033[01;32m\]➜\[\033[00m\]  \[\033[01;36m\]\W\[\033[00m\] \$ '
+            if [ "$EUID" -eq 0 ]; then
+                PS1='\[\033[01;31m\]➜\[\033[00m\]  \[\033[01;36m\]\W\[\033[00m\] # '
+            else
+                PS1='\[\033[01;32m\]➜\[\033[00m\]  \[\033[01;36m\]\W\[\033[00m\] \$ '
+            fi
             ;;
     esac
 }
@@ -46,8 +75,12 @@ fi
 set-prompt() {
     if [ -x "$HOME/.config/i3/scripts/set_prompt.sh" ]; then
         "$HOME/.config/i3/scripts/set_prompt.sh" "$@"
+    elif [ -n "$SUDO_USER" ] && [ -x "/home/$SUDO_USER/.config/i3/scripts/set_prompt.sh" ]; then
+        "/home/$SUDO_USER/.config/i3/scripts/set_prompt.sh" "$@"
     elif [ -x "$HOME/.local/bin/set-prompt" ]; then
         "$HOME/.local/bin/set-prompt" "$@"
+    elif [ -x "/usr/local/bin/set-prompt" ]; then
+        "/usr/local/bin/set-prompt" "$@"
     fi
     _apply_kali_bash_prompt
 }
